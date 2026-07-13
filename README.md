@@ -43,6 +43,10 @@ However, this experiment exposed a critical mathematical barrier: **extreme clas
 
 **We used ollama for the models as well and hugging face but ollama we had the complication that when we added that to the terminal of MAC the rhetoricon was unable to get it to bypass it we did grep but the whole thing took a long time and since hugging face was already implemented we decided to just stick with that**
 
+**We tried gemma 2b not phi3 since gemma 2b was a much smaller model and we were trying to utilize as much minimum ram as possible then it turns out gemma 2b had some token or other restriction so we switched to qwen from ramona's paper she worked with mistra 7B but it was a massivly big model and at the time I didn't think we needed that since we already had the bert model rag pipeline rules and we decided to switch to qwen 0.5B no restrcictions of sort like gemma 2b google's LLM**
+
+**We also had the gemini api but we were hitting the rate limit for it pretty quick and we needed a model that didn't have rate limits of that sort cause if we were paying why not just pay the RA's at that point so which is why we had gone to model LLM free hugging face**
+
 ### 2.4 Reverting to Sequence Classification + LLM Extraction (The Hybrid Solution)
 Guided by these findings, we established that rhetorical figures are best detected holistically at the sequence level. We definitively reverted our local classifier to the stable **DistilBERT Sequence Classifier** (which has zero dependencies and trains without numerical instability), lowering the classification threshold to 5% to capture multiple overlapping candidate figures in a single sentence. 
 
