@@ -7,35 +7,63 @@ The computational detection of rhetorical figures remains a complex challenge in
 
 ## System Architecture Overview
 
+Rhetoricon leverages the core **Triple-Check Hybrid Pipeline** (exact-match database caching, sequence classification, and local LLM verification) across two distinct user-facing platform workflows:
+
+### 1. iSocrates Chat & PDF Analysis Workflow (Admin Research Tool)
+This workflow is optimized for real-time exploratory analysis, routing the input dynamically based on whether the user is asking chat questions or requesting heavy PDF span extraction.
+
 ```mermaid
 flowchart TD
-    A(["User Input\n(Chat / PDF Upload)"])
-    B{{"Postgres\nExact-Match Shortcut"}}
-    C(["✅ 100% Verified\nInstant Return"])
-    D["DistilBERT\nSequence Classifier\n(threshold: 5%)"]
-    E{{"Phonetic Figure?\n(Assonance / Consonance)"}}
-    F["CMU Pronouncing Dict\nARPAbet Intersection\n→ score 95"]
-    G{{"Structural Hint?\n(Grammar Injection)"}}
-    H["Go Backend\nInjects Grammar Hints\ninto System Prompt"]
-    I["Qwen 2.5 7B GGUF\nDynamic Few-Shot RAG\nVerification (0-100)"]
-    J(["JSON Response\nCharacter Spans + Explanation"])
-    K(["Frontend\niSocrates Chat / GoFigure Badge"])
+    A1(["Admin Input\n(Chat / PDF Upload)"])
+    B1{{"Postgres\nExact-Match Shortcut"}}
+    C1(["✅ 100% Verified\nInstant Return"])
+    D1{{"Input Type?"}}
+    E1["Chat Interface\n(Interactive Q&A)"]
+    F1["Qwen 2.5 0.5B Chat\n(Sub-second Latency)"]
+    G1["PDF Document Analysis\n(Go PDF Parser /extract)"]
+    H1["Triple-Check Pipeline\n(DistilBERT + Phonetic + Qwen 7B GGUF)"]
+    I1(["Interactive UI\n(Highlight overlays / Local Switcher)"])
+    J1(["HITL Feedback Loop\n(User corrections -> /feedback DB)"])
 
-    A --> B
-    B -- "Match Found" --> C
-    B -- "No Match" --> D
-    D -- "Candidate Figures" --> E
-    E -- "Yes" --> F
-    E -- "No" --> G
-    F --> J
-    G -- "Yes" --> H
-    G -- "No" --> I
-    H --> I
-    I --> J
-    J --> K
+    A1 --> B1
+    B1 -- "Match Found" --> C1
+    B1 -- "No Match" --> D1
+    D1 -- "Chat Query" --> E1
+    E1 --> F1
+    F1 --> I1
+    D1 -- "PDF Upload" --> G1
+    G1 --> H1
+    H1 --> I1
+    I1 --> J1
 ```
+*Figure 1: iSocrates Admin Research Tool Workflow. Chat queries utilize a lightweight model arena instance for responsiveness, while document uploads leverage the full sequence classification and 7B LLM verification pipeline.*
 
-*Figure 1: The Triple-Check Hybrid Architecture. Each layer acts as a deterministic gate that prevents the probabilistic LLM from being invoked unnecessarily, prioritizing speed and mathematical certainty.*
+### 2. GoFigure Submission & Verification Pipeline (Public Platform)
+This workflow is triggered when users submit rhetorical figures to the crowdsourced database. It combines core AI figure classification with external metadata validation and downstream synchronization.
+
+```mermaid
+flowchart TD
+    A2(["Contributor Submission\n(Passage & Metadata Citation)"])
+    B2["Core AI Analysis\n(Triple-Check /extract)"]
+    C2["AI Figure Match & Spans\n(Assigned confidence score)"]
+    D2["API Source Verification\n(Matches against Google Books / Open Library)"]
+    E2{{"Metadata Discrepancy?"}}
+    F2["Flag 'Suspicious'\n(Show Auto-Fix suggestions)"]
+    G2["Flag 'Valid'"]
+    H2["Moderator Review Panel\n(Approve / Reject Action)"]
+    I2(["Zotero Auto-Sync\n(Pushed to shared bibliography on approval)"])
+
+    A2 --> B2
+    B2 --> C2
+    C2 --> D2
+    D2 --> E2
+    E2 -- "Yes" --> F2
+    E2 -- "No" --> G2
+    F2 --> H2
+    G2 --> H2
+    H2 -- "Approved" --> I2
+```
+*Figure 2: GoFigure Crowdsourced Submission & Verification Pipeline. Submissions undergo parallel automated figure extraction and metadata source validation prior to manual moderator vetting.*
 
 ---
 
@@ -85,7 +113,7 @@ While the Sequence Classifier is extremely fast, it still struggles with highly 
 
 ### 3.1 Model Selection: Why Gemma 2B?
 1. **Avoiding External APIs:** We initially considered using external APIs like Google's Gemini. While the free tier works for testing, scaling it to a public audience would hit strict rate limits and expensive paywalls. Because we already possessed a massive database of human-verified training data, we opted to build a completely self-hosted solution to keep the bot entirely free and accessible.
-2. **Mistral vs. Gemma 2B:** We evaluated local LLMs to host on our Portainer staging/production servers. Mistral 7B (Jiang et al., 2023) is highly capable but requires nearly 5 GB of RAM when quantized, making it too heavy and risky for a lightweight Portainer deployment. We ultimately selected **Gemma 2B** (Gemma Team, 2024). At under 2 GB of RAM (when using 4-bit quantization), Gemma 2B is incredibly lightweight, fast, and highly capable of strict pattern-matching when provided with in-context examples.
+2. **Mistral, Phi-3, and Gemma 2B:** We evaluated several local open-weight models to host on our Portainer staging/production servers. Mistral 7B (Jiang et al., 2023) is highly capable but requires nearly 5 GB of RAM when quantized, making it too heavy and risky for a lightweight Portainer deployment. We also tested Microsoft's Phi-3-mini (Abdin et al., 2024), which showed solid reasoning capabilities. However, we ultimately selected **Gemma 2B** (Gemma Team, 2024) for our initial trials. At under 2 GB of RAM (when using 4-bit quantization), Gemma 2B was incredibly lightweight, fast, and highly capable of strict pattern-matching when provided with in-context examples.
 
 ### 3.2 Optimizing the Local LLM: Swapping to Qwen 0.5B on CPU
 While Gemma 2B performed well in terms of accuracy, running inference on a virtualized CPU core (UTM VM) took over 40 seconds per figure verification. For passages containing multiple candidate figures, this led to verification loops lasting over 2 minutes.
@@ -105,7 +133,7 @@ We then implemented a closed-loop training dataset pipeline to dynamically updat
 2. **LLM Dataset Exporter:** We created `prepare_llm_dataset.py` to compile database definitions, gold-standard examples, and user corrections into a structured instruction-tuning dataset (`qwen_lora_dataset.json`) containing over 69,000 prompt-completion pairs to fine-tune Qwen on Google Colab using LoRA (Hu et al., 2021).
 
 ### 3.5 Scaling Up: Solving "0% Collapse" with Qwen 2.5 7B GGUF
-Despite fine-tuning, smaller models (0.5B - 2B) exhibited a structural "0% collapse" on complex definitions and were prone to outputting hallucinatory text rather than strict JSON logic. 
+Despite fine-tuning, smaller models (0.5B - 2B) exhibited a structural "0% collapse" on complex definitions and were prone to outputting hallucinatory text rather than strict JSON logic. Furthermore, initial attempts to load unquantized 7B models in PyTorch (FP16) or run multiple independent inference engines concurrently (like Ollama alongside Hugging Face sidecars) resulted in severe memory paging exceeding 12GB RAM, causing VM-wide thrashing and timeouts. 
 
 To achieve state-of-the-art capability without breaking our strict 6GB RAM ceiling, we pivoted to the **4-bit quantized Qwen 2.5 7B GGUF model** using `llama.cpp` (Gerganov, 2026). By precisely bounding the context window (`n_ctx=2048`), we safely fit a world-class 7B model into ~4.3GB of RAM. We combined this with a deterministic **Dynamic Few-Shot RAG** prompt (Lewis et al., 2020) that injects 3 "True" database examples into the context window and mathematically constraints the output to a strict raw integer (`0-100`), entirely eliminating logic hallucinations.
 
@@ -196,7 +224,9 @@ Relying strictly on a two-step process (classification -> LLM verification) risk
 - *Proof-of-Concept Validation (Epitrochasmus & Erotema)*: To validate this architectural theory, we built deterministic intercepts for structural figures. For *Epitrochasmus* (defined as a rapid succession of short words), the algorithm calculates word count and average word length, bypassing the LLM entirely if triggered. In our targeted evaluation, this rule-based injection successfully identified 100% of the true positives (3 TP, 0 FN), though the broad constraints resulted in a 50.0% overall accuracy due to false positives. Conversely, for *Erotema* (Rhetorical Question), injecting syntax cues (detecting question marks) into the LLM context resulted in a flawless **100.0% accuracy** (3 TP, 0 FN, 3 TN, 0 FP) on our targeted sub-sample. While these preliminary results on a small test set show promising 100% recall for structural identification via symbolic constraints, this requires validation on a larger, diverse corpus to rule out potential overfitting.
 
 ### 7.2 Model Arena
-As we scaled, the API needed to abstract away single-model dependency. We introduced a "Model Arena" architecture that separates conversational UI logic from heavy extraction processing. A highly compressed 0.5B model (Qwen Team, 2024) handles standard user chat requests with sub-second latency and minimal RAM overhead, while the massive 7B model is strictly reserved for the mathematically-intensive pipelines: `/extract` (the service layer that performs sentence-level classification to identify candidate rhetorical figures) and `/verify` (the verification layer that leverages the 7B LLM to perform character-span identification and explanatory reasoning).
+As the platform scaled, the API was designed to support multiple concurrent models. In our initial experiments, we tested a "Model Arena" architecture that separated conversational UI logic from heavy extraction processing. A highly compressed 0.5B model (Qwen Team, 2024) was loaded to handle standard user chat requests with sub-second latency and minimal RAM overhead, reserving the 7B model strictly for `/extract` and `/verify`. 
+
+However, as discussed in Section 5.3, the 0.5B model suffered from severe logic hallucinations during chat interactions. Consequently, we standardized the entire production deployment to use the robust Qwen 2.5 7B GGUF model for both conversational chat and mathematically intensive extraction/verification, achieving much higher reasoning accuracy while remaining comfortably within our 6GB RAM ceiling. Unused model weights (like the 0.5B chat model) were purged from startup initialization to conserve memory.
 
 ### 7.3 Saccading and OCR Integration
 Currently, the pipeline is strictly text-based. Introducing Optical Character Recognition (OCR) to read figures directly from scanned texts will require simulating human "saccading" (eye movement tracking over text blocks) to accurately map rhetorical structures across spatial dimensions.
@@ -230,3 +260,4 @@ The detection of rhetorical figures cannot be solved by simply throwing larger m
 13. Parrish, A. (2026). *pronouncingpy: A simple interface for the CMU Pronouncing Dictionary* [Computer software]. GitHub. https://github.com/aparrish/pronouncingpy
 14. Google. (2024). *Google Books APIs*. Google Developers. https://developers.google.com/books/
 15. Abdin, M., et al. (2024). Phi-3 Technical Report: A Highly Capable Language Model Locally on Your Phone. arXiv preprint arXiv:2404.14219. https://arxiv.org/abs/2404.14219
+16. Paszke, A., et al. (2019). *PyTorch: An Imperative Style, High-Performance Deep Learning Library*. Advances in Neural Information Processing Systems, 32.
