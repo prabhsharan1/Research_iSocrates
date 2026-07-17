@@ -5,6 +5,40 @@ The computational detection of rhetorical figures remains a complex challenge in
 
 ---
 
+## System Architecture Overview
+
+```mermaid
+flowchart TD
+    A(["User Input\n(Chat / PDF Upload)"])
+    B{{"Postgres\nExact-Match Shortcut"}}
+    C(["✅ 100% Verified\nInstant Return"])
+    D["DistilBERT\nSequence Classifier\n(threshold: 5%)"]
+    E{{"Phonetic Figure?\n(Assonance / Consonance)"}}
+    F["CMU Pronouncing Dict\nARPAbet Intersection\n→ score 95"]
+    G{{"Structural Hint?\n(Grammar Injection)"}}
+    H["Go Backend\nInjects Grammar Hints\ninto System Prompt"]
+    I["Qwen 2.5 7B GGUF\nDynamic Few-Shot RAG\nVerification (0-100)"]
+    J(["JSON Response\nCharacter Spans + Explanation"])
+    K(["Frontend\niSocrates Chat / GoFigure Badge"])
+
+    A --> B
+    B -- "Match Found" --> C
+    B -- "No Match" --> D
+    D -- "Candidate Figures" --> E
+    E -- "Yes" --> F
+    E -- "No" --> G
+    F --> J
+    G -- "Yes" --> H
+    G -- "No" --> I
+    H --> I
+    I --> J
+    J --> K
+```
+
+*Figure 1: The Triple-Check Hybrid Architecture. Each layer acts as a deterministic gate that prevents the probabilistic LLM from being invoked unnecessarily, prioritizing speed and mathematical certainty.*
+
+---
+
 ## 1. Introduction
 Rhetorical figures—such as *Alliteration*, *Antimetabole*, and *Oxymoron*—are omnipresent in persuasive communication. However, identifying them computationally is notoriously difficult. A major hurdle is the ambiguity of definitions; for instance, distinguishing an intentional *Anaphora* from an accidental repetition of a stop word, or differentiating *Chiasmus* from *Antimetabole*.
 
@@ -130,6 +164,30 @@ To provide complete transparency into the black box of ML, we built dynamic UI b
 - If a figure is detected by DistilBERT, the UI displays the exact mathematical confidence percentage (e.g., *Alliteration (65%)*).
 - If a figure is routed through the RAG fallback and the LLM verifies it without a mathematical score, the UI cleanly replaces "0.0%" with an **"AI Analysis"** badge.
 
+### 6.3 Multimodal Source Validation (Chat & PDF)
+Rhetorical analysis often requires processing lengthy academic papers or primary source texts. To support this, iSocrates seamlessly integrates multimodal source validation utilizing the GoFigure backend infrastructure. Users can interact with the system via standard conversational chat, or directly upload PDF documents. 
+
+When a PDF is uploaded, the backend relies on a dedicated Go PDF parser (`github.com/dslipak/pdf`) to extract the raw plaintext. This text is then passed through the `/extract` pipeline for sequence-level classification, returning a verified, paginated list of rhetorical figures identified directly from the source document. For physical books, the frontend integrates directly with the **Google Books API** to automatically validate ISBNs and fetch authoritative metadata (such as authors, publishers, and publication dates). Furthermore, to maintain academic rigor, the system syncs these validated sources natively with **Zotero** via a custom API integration, ensuring all document metadata and annotations remain perfectly synchronized across platforms.
+
+### 6.4 Platform Implementations: iSocrates vs. GoFigure
+The iSocrates pipeline is deployed across two distinct platform contexts with different user roles and interaction models.
+
+**iSocrates (Admin Research Tool):** Lives on the admin/research dashboard. It is an interactive, conversational bot designed for exploratory rhetorical analysis. Researchers can paste arbitrary sentences, chat with the model to understand its reasoning, upload full PDFs to have the pipeline dynamically extract all figures, and submit corrective feedback directly into the HITL training loop.
+
+**GoFigure (Public Crowdsourcing Platform):** The pipeline runs in the background on the public-facing GoFigure platform. When a community contributor submits a rhetorical figure instance from a book, the iSocrates AI Assistant automatically analyzes the submission, assigns per-figure confidence scores via DistilBERT + LLM, validates the cited source against the Google Books API, and presents an Approve/Reject recommendation to moderators.
+
+![iSocrates Admin Chat Interface — showing the conversational bot analyzing 'She does, doesn't she?' and identifying EROTEMA and SIBILANCE in real-time.](/home/prabh/.gemini/antigravity-ide/brain/ee0c8dcf-aa08-4d79-ad37-4146e28046cf/isocrates.png)
+
+*Figure 2: The iSocrates Admin Interface. The bot is shown identifying EROTEMA and SIBILANCE in a user-submitted sentence alongside a list of candidate figures detected by DistilBERT.*
+
+![GoFigure Moderation Panel — showing the iSocrates AI Assistant analyzing Epiphora and Ploke instances with 85% confidence scores and source validation.](/home/prabh/.gemini/antigravity-ide/brain/ee0c8dcf-aa08-4d79-ad37-4146e28046cf/gofigure_analysis.png)
+
+*Figure 3: The GoFigure Moderation Panel. The iSocrates AI Assistant is shown analyzing a submitted instance, displaying per-figure confidence scores (85.0%) for Epiphora and Ploke, and providing a source validation verdict (⚠ Suspicious — publisher mismatch flagged, with an Auto-Fix option).*
+
+> **Video Demonstrations:** Live recordings of both platforms in action are available:  
+> - [iSocrates Bot Demo](pictures/isocrates.mov) — Conversational rhetorical analysis and HITL feedback submission.  
+> - [GoFigure Verification Demo](pictures/gofigure.mov) — End-to-end crowdsourcing, AI analysis, source validation, and moderation workflow.
+
 ## 7. The Future: Advanced Architectures
 While the current pipeline is stable in production, automated evaluation metrics provide us with clear structural weaknesses to tackle next:
 
@@ -171,3 +229,4 @@ The detection of rhetorical figures cannot be solved by simply throwing larger m
 12. Mangrulkar, S., Gugger, S., Debut, L., Belkada, Y., Paul, S., & Bossan, B. (2026). *PEFT: State-of-the-art Parameter-Efficient Fine-Tuning methods* [Computer software]. GitHub. https://github.com/huggingface/peft.
 13. Parrish, A. (2026). *pronouncingpy: A simple interface for the CMU Pronouncing Dictionary* [Computer software]. GitHub. https://github.com/aparrish/pronouncingpy
 14. Google. (2024). *Google Books APIs*. Google Developers. https://developers.google.com/books/
+15. Abdin, M., et al. (2024). Phi-3 Technical Report: A Highly Capable Language Model Locally on Your Phone. arXiv preprint arXiv:2404.14219. https://arxiv.org/abs/2404.14219
