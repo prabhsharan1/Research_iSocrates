@@ -19,7 +19,7 @@ flowchart TD
     C1(["✅ 100% Verified\nInstant Return"])
     D1{{"Input Type?"}}
     E1["Chat Interface\n(Interactive Q&A)"]
-    F1["Qwen 2.5 0.5B Chat\n(Sub-second Latency)"]
+    F1["Qwen 2.5 7B Chat\n(Local Inference)"]
     G1["PDF Document Analysis\n(Go PDF Parser /extract)"]
     H1["Triple-Check Pipeline\n(DistilBERT + Phonetic + Qwen 7B GGUF)"]
     I1(["Interactive UI\n(Highlight overlays / Local Switcher)"])
@@ -44,7 +44,7 @@ This workflow is triggered when users submit rhetorical figures to the crowdsour
 ```mermaid
 flowchart TD
     A2(["Contributor Submission\n(Passage & Metadata Citation)"])
-    B2["Core AI Analysis\n(Triple-Check /extract)"]
+    B2["Core AI Analysis\n(DistilBERT + Phonetic + Qwen 7B GGUF)"]
     C2["AI Figure Match & Spans\n(Assigned confidence score)"]
     D2["API Source Verification\n(Matches against Google Books / Open Library)"]
     E2{{"Metadata Discrepancy?"}}
@@ -91,12 +91,20 @@ While the DistilBERT sequence classifier (Sanh et al., 2019) achieved an accurac
 ### 2.2 The Token Classifier & The "87% Accuracy" Paradox
 To solve the single-figure limitation, we shifted our architecture to a Hugging Face `AutoModelForTokenClassification` (Wolf et al., 2020). This model was designed to pinpoint the exact words constituting multiple figures using `BIO` (Beginning, Inside, Outside) tagging. 
 
-During validation, this model achieved an impressive **87% accuracy**. However, deploying this model revealed a classic ML pitfall: poor out-of-domain generalization. In real-world text, it failed catastrophically on edge cases—for example, falsely identifying the single preposition "to" as an *Antimetabole*. It entirely missed overarching phonetic figures (like *Alliteration*) that span entire sentences.
+During validation, this model achieved an impressive **87% accuracy**. However, deploying this model revealed a classic ML pitfall: poor out-of-domain generalization due to extreme class imbalance, where over 99.9% of tokens belong to the 'Outside' (O) class. In practice, the model simply learned to classify almost all tokens as "Outside", producing misleadingly high accuracy while failing to detect actual figures (resulting in extremely low F1, Precision, and Recall).
+
+| Epoch | Training Loss | Validation Loss | Precision | Recall | F1 | Accuracy |
+|-------|---------------|-----------------|-----------|--------|----|----------|
+| 1     | 0.700922      | 0.688752        | 0.010256  | 0.001326 | 0.002349 | 0.873588 |
+| 4     | 0.544936      | 0.626245        | 0.062405  | 0.040782 | 0.049328 | 0.872986 |
+| 8     | 0.437769      | 0.624886        | 0.076018  | 0.051393 | 0.061325 | 0.873701 |
+
+*Table 2: Training metrics showing the token classifier's high overall accuracy but low functional performance (F1/Precision/Recall) due to class imbalance.*
 
 ### 2.3 The DeBERTa Token Classifier & The "NaN Loss" Collapse
 In our second attempt to make token classification work, we upgraded to `microsoft/deberta-v3-small` (He et al., 2021) to exploit its advanced relative position encodings. 
 
-The transition to `microsoft/deberta-v3-small` introduced numerical instability. Extreme class imbalance, where over 99.9% of tokens belong to the 'Outside' (O) class, led to gradient collapse. This highlighted the necessity of shifting away from token-level classification toward a hybrid sequence-extraction pipeline.
+The transition to `microsoft/deberta-v3-small` introduced numerical instability. Extreme class imbalance led to gradient collapse. This highlighted the necessity of shifting away from token-level classification toward a hybrid sequence-extraction pipeline.
 
 ### 2.4 Reverting to Sequence Classification + LLM Extraction (The Hybrid Solution)
 Guided by these findings, we established that rhetorical figures are best detected holistically at the sequence level. We definitively reverted our local classifier to the stable **DistilBERT Sequence Classifier** (Sanh et al., 2019), lowering the classification threshold to 5% to capture multiple overlapping candidate figures in a single sentence. 
@@ -112,9 +120,8 @@ While *Doxa* serves as our primary data repository, we implemented a strict, aut
 While the Sequence Classifier is extremely fast, it still struggles with highly specific edge-case definitions that require deep logical reasoning. We needed an LLM to verify these complex cases.
 
 ### 3.1 Model Selection: Why Gemma 2B?
-1. **Avoiding External APIs:** We initially considered using external APIs like Google's Gemini. While the free tier works for testing, scaling it to a public audience would hit strict rate limits and expensive paywalls. Because we already possessed a massive database of human-verified training data, we opted to build a completely self-hosted solution to keep the bot entirely free and accessible.
-2. **Mistral, Phi-3, and Gemma 2B:** We evaluated several local open-weight models to host on our Portainer staging/production servers. Mistral 7B (Jiang et al., 2023) is highly capable but requires nearly 5 GB of RAM when quantized, making it too heavy and risky for a lightweight Portainer deployment. We also tested Microsoft's Phi-3-mini (Abdin et al., 2024), which showed solid reasoning capabilities. However, we ultimately selected **Gemma 2B** (Gemma Team, 2024) for our initial trials. At under 2 GB of RAM (when using 4-bit quantization), Gemma 2B was incredibly lightweight, fast, and highly capable of strict pattern-matching when provided with in-context examples.
-
+1. **Avoiding External APIs:** We initially considered using external APIs like Google's Gemini. While the free tier works for simple testing, scaling it to a public audience would hit strict rate limits and expensive paywalls. During testing, the free tier of the Gemini API frequently failed or timed out after analyzing only 1 or 2 sentences depending on their length. Because we already possessed a massive database of human-verified training data, we opted to build a completely self-hosted solution to keep the bot entirely free and accessible.
+2. **Mistral, Phi-3, and Gemma 2B:** During our design phase, we researched several local open-weight models to host on our Portainer staging/production servers. Mistral 7B (Jiang et al., 2023) is highly capable but requires nearly 5 GB of RAM when quantized, making it too heavy and risky for a lightweight Portainer deployment. We also evaluated Microsoft's Phi-3-mini (Abdin et al., 2024), which showed solid reasoning capabilities. However, we ultimately selected **Gemma 2B** (Gemma Team, 2024) for our initial trials. At under 2 GB of RAM (when using 4-bit quantization), Gemma 2B was incredibly lightweight, fast, and highly capable of strict pattern-matching when provided with in-context examples.
 ### 3.2 Optimizing the Local LLM: Swapping to Qwen 0.5B on CPU
 While Gemma 2B performed well in terms of accuracy, running inference on a virtualized CPU core (UTM VM) took over 40 seconds per figure verification. For passages containing multiple candidate figures, this led to verification loops lasting over 2 minutes.
 
@@ -169,7 +176,7 @@ Across the full suite of 834 test cases, the Qwen 2.5 7B GGUF hybrid pipeline ac
 | False Negatives (FN) | 127 |
 | **Grand Accuracy** | **75.1%** |
 
-*Table 2: Final empirical evaluation metrics for the iSocrates Hybrid Architecture.*
+*Table 3: Final empirical evaluation metrics for the iSocrates Hybrid Architecture.*
 
 This establishes a massive **58.5% absolute improvement** over the standalone DistilBERT Sequence Classifier (16.6% baseline). However, analyzing the confusion matrix reveals a hard empirical ceiling. While the LLM excels at semantic pattern recognition, it severely underperforms on figures requiring strict grammatical syntax (e.g., *Syllepsis* scored 0.0%, *Epitrochasmus* 16.7%, and *Hypozeugma* 16.7%). These specific weaknesses provide the mathematical justification required to transition to advanced, constraint-based architectures.
 
@@ -185,7 +192,7 @@ Before passing a user's chat message to the 7B LLM, the backend intercepts the t
 ## 6. Frontend UI/UX Integration
 
 ### 6.1 Local Model Toggle Switcher
-We added a native "Local Model" toggle switcher directly into the iSocrates chat header with distinct green styling. This allows administrators or users to seamlessly force the bot to rely entirely on the offline DistilBERT/Qwen pipeline, manually overriding any cloud endpoints.
+We initially designed and implemented a "Local Model" toggle switcher in the iSocrates chat header with distinct styling, allowing administrators or users to force the bot to rely entirely on the offline DistilBERT/Qwen pipeline instead of cloud endpoints. However, to guarantee consistent reasoning accuracy and remove external dependencies completely, we deprecated the toggle and standardized the entire system to run natively on the offline, local hybrid pipeline.
 
 ### 6.2 Confidence & AI Analysis Badges
 To provide complete transparency into the black box of ML, we built dynamic UI badges:
@@ -202,15 +209,15 @@ The iSocrates pipeline is deployed across two distinct platform contexts with di
 
 **iSocrates (Admin Research Tool):** Lives on the admin/research dashboard. It is an interactive, conversational bot designed for exploratory rhetorical analysis. Researchers can paste arbitrary sentences, chat with the model to understand its reasoning, upload full PDFs to have the pipeline dynamically extract all figures, and submit corrective feedback directly into the HITL training loop.
 
-**GoFigure (Public Crowdsourcing Platform):** The pipeline runs in the background on the public-facing GoFigure platform. When a community contributor submits a rhetorical figure instance from a book, the iSocrates AI Assistant automatically analyzes the submission, assigns per-figure confidence scores via DistilBERT + LLM, validates the cited source against the Google Books API, and presents an Approve/Reject recommendation to moderators.
+**GoFigure (Public Crowdsourcing Platform):** The pipeline runs in the background on the public-facing GoFigure platform. When a community contributor submits a rhetorical figure instance from a book, the iSocrates AI Assistant automatically analyzes the submission, assigns per-figure confidence scores via DistilBERT + LLM, validates the cited source against the Google Books API, and presents an Approve/Reject recommendation to moderator approval.
 
 ![iSocrates Admin Chat Interface — showing the conversational bot analyzing 'She does, doesn't she?' and identifying EROTEMA and SIBILANCE in real-time.](isocrates.png)
 
-*Figure 2: The iSocrates Admin Interface. The bot is shown identifying EROTEMA and SIBILANCE in a user-submitted sentence alongside a list of candidate figures detected by DistilBERT.*
+*Figure 3: The iSocrates Admin Interface. The conversational bot is shown identifying rhetorical figures in real-time within an interactive chat interface, explaining its reasoning to the user.*
 
 ![GoFigure Moderation Panel — showing the iSocrates AI Assistant analyzing Epiphora and Ploke instances with 85% confidence scores and source validation.](gofigureanalysis.png)
 
-*Figure 3: The GoFigure Moderation Panel. The iSocrates AI Assistant is shown analyzing a submitted instance, displaying per-figure confidence scores (85.0%) for Epiphora and Ploke, and providing a source validation verdict (⚠ Suspicious — publisher mismatch flagged, with an Auto-Fix option).*
+*Figure 4: The GoFigure Moderation Panel. The iSocrates AI Assistant is shown analyzing a submitted instance, displaying per-figure confidence scores (85.0%) for Epiphora and Ploke, and providing a source validation verdict. The panel displays the user's submitted annotations that are currently pending moderator approval.*
 
 > **Video Demonstrations:** Live recordings of both platforms in action are available:  
 > - [iSocrates Bot Demo](isocrates.mov) — Conversational rhetorical analysis and HITL feedback submission.  
@@ -224,12 +231,12 @@ Relying strictly on a two-step process (classification -> LLM verification) risk
 - *Proof-of-Concept Validation (Epitrochasmus & Erotema)*: To validate this architectural theory, we built deterministic intercepts for structural figures. For *Epitrochasmus* (defined as a rapid succession of short words), the algorithm calculates word count and average word length, bypassing the LLM entirely if triggered. In our targeted evaluation, this rule-based injection successfully identified 100% of the true positives (3 TP, 0 FN), though the broad constraints resulted in a 50.0% overall accuracy due to false positives. Conversely, for *Erotema* (Rhetorical Question), injecting syntax cues (detecting question marks) into the LLM context resulted in a flawless **100.0% accuracy** (3 TP, 0 FN, 3 TN, 0 FP) on our targeted sub-sample. While these preliminary results on a small test set show promising 100% recall for structural identification via symbolic constraints, this requires validation on a larger, diverse corpus to rule out potential overfitting.
 
 ### 7.2 Model Arena
-As the platform scaled, the API was designed to support multiple concurrent models. In our initial experiments, we tested a "Model Arena" architecture that separated conversational UI logic from heavy extraction processing. A highly compressed 0.5B model (Qwen Team, 2024) was loaded to handle standard user chat requests with sub-second latency and minimal RAM overhead, reserving the 7B model strictly for `/extract` and `/verify`. 
+To support potential scaling of concurrent requests, the API was designed to support multiple concurrent models. In our initial experiments, we tested a "Model Arena" architecture that separated conversational UI logic from heavy extraction processing. A highly compressed 0.5B model (Qwen Team, 2024) was loaded to handle standard user chat requests with sub-second latency and minimal RAM overhead, reserving the 7B model strictly for `/extract` and `/verify`. 
 
 However, as discussed in Section 5.3, the 0.5B model suffered from severe logic hallucinations during chat interactions. Consequently, we standardized the entire production deployment to use the robust Qwen 2.5 7B GGUF model for both conversational chat and mathematically intensive extraction/verification, achieving much higher reasoning accuracy while remaining comfortably within our 6GB RAM ceiling. Unused model weights (like the 0.5B chat model) were purged from startup initialization to conserve memory.
 
 ### 7.3 Saccading and OCR Integration
-Currently, the pipeline is strictly text-based. Introducing Optical Character Recognition (OCR) to read figures directly from scanned texts will require simulating human "saccading" (eye movement tracking over text blocks) to accurately map rhetorical structures across spatial dimensions.
+Currently, the pipeline is strictly text-based. Introducing Optical Character Recognition (OCR) to extract text directly from scanned documents or physical books before running them through the pipeline will allow us to support a much broader range of source formats.
 
 ### 7.4 Addressing LoRA Future Directions
 Our architectural decisions directly address several future research directions proposed by Hu et al. (2021) in their foundational LoRA paper. By expanding upon their theoretical framework, our pipeline resolves practical deployment limitations:
@@ -240,7 +247,7 @@ Our architectural decisions directly address several future research directions 
 *   **Rank-Deficiency and Neuro-Symbolic Inspiration:** The LoRA authors identified rank-deficiency in weight updates as an area for future exploration (Hu et al., 2021). Recognizing that we cannot rely on low-rank weight updates alone to resolve structural and phonetic tokenization blindspots, we adopted a Neuro-Symbolic approach. We utilized deterministic, symbolic tools—such as the CMU Pronouncing Dictionary (Weide, 1998)—to bypass the probabilistic LLM entirely in edge cases where the network weights are inherently deficient.
 
 ## 8. Conclusion
-The detection of rhetorical figures cannot be solved by simply throwing larger models at the problem. As demonstrated by the failure of our 87% token classifier and LLM structural blindspots, understanding the holistic context of a sentence is paramount. By combining the lightning-fast classification of a small encoder (DistilBERT), deterministic programmatic dictionary bypasses, and the deep, mathematically-constrained reasoning of a dual-model LLM architecture (Qwen 0.5B for conversational latency; Qwen 7B for robust semantic extraction), **iSocrates** achieves state-of-the-art accuracy, complete data privacy, and a highly scalable, rate-limit-free production environment.
+The detection of rhetorical figures cannot be solved by simply throwing larger models at the problem. As demonstrated by the failure of our token classifier and LLM structural blindspots, understanding the holistic context of a sentence is paramount. By combining the lightning-fast classification of a small encoder (DistilBERT), deterministic programmatic dictionary bypasses, and the deep, mathematically-constrained reasoning of a quantized LLM architecture (Qwen 7B GGUF), the **iSocrates** pipeline achieves high accuracy, complete local data privacy (guaranteeing that sensitive or copyrighted text is never sent to external APIs), and a highly scalable, rate-limit-free production environment.
 
 ---
 
