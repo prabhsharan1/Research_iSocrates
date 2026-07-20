@@ -14,29 +14,31 @@ This workflow is optimized for real-time exploratory analysis, routing the input
 
 ```mermaid
 flowchart TD
-    A1(["Admin Input\n(Chat / PDF Upload)"])
-    B1{{"Postgres\nExact-Match Shortcut"}}
-    C1(["✅ 100% Verified\nInstant Return"])
-    D1{{"Input Type?"}}
-    E1["Chat Interface\n(Interactive Q&A)"]
-    F1["Qwen 2.5 7B Chat\n(Local Inference)"]
-    G1["PDF Document Analysis\n(Go PDF Parser /extract)"]
-    H1["Triple-Check Pipeline\n(DistilBERT + Phonetic + Qwen 7B GGUF)"]
-    I1(["Interactive UI\n(Highlight overlays / Local Switcher)"])
-    J1(["HITL Feedback Loop\n(User corrections -> /feedback DB)"])
+    A1(["Admin Input / Contributor Submission"])
+    B1{{"Postgres Exact-Match Shortcut"}}
+    C1(["✅ 100% Verified Instant Return"])
+    D1["DistilBERT Sequence Classifier"]
+    E1{{"Fast-Path Bypass Match?"}}
+    F1["Token Normalization & Phonetic Check\n(Assonance / Consonance → Score 95)"]
+    G1["Repetition & Syntactic Rules\n(Epanaphora / Epiphora / Anadiplosis / Isocolon → Score 95)"]
+    H1{{"Fail-Soft Fallback\n(Match Succeeded?)"}}
+    I1["Qwen 2.5 7B GGUF\n(Dynamic Few-Shot RAG Verification)"]
+    J1(["Verified Figure & Character Spans"])
 
     A1 --> B1
     B1 -- "Match Found" --> C1
     B1 -- "No Match" --> D1
-    D1 -- "Chat Query" --> E1
-    E1 --> F1
-    F1 --> I1
-    D1 -- "PDF Upload" --> G1
+    D1 -- "Candidates" --> E1
+    E1 -- "Phonetic" --> F1
+    E1 -- "Repetition / Syntax" --> G1
+    F1 --> H1
     G1 --> H1
-    H1 --> I1
+    H1 -- "Yes (Score 95)" --> J1
+    H1 -- "No (Fallback)" --> I1
+    E1 -- "Semantic / Complex" --> I1
     I1 --> J1
 ```
-*Figure 1: iSocrates Admin Research Tool Workflow. Chat queries utilize a lightweight model arena instance for responsiveness, while document uploads leverage the full sequence classification and 7B LLM verification pipeline.*
+*Figure 1: The Enhanced Triple-Check Hybrid Architecture. Deterministic phonetic, repetition, and syntactic fast-paths act as sub-millisecond logic gates before falling back softly to the local 7B LLM for complex semantic verification.*
 
 ### 2. GoFigure Submission & Verification Pipeline (Public Platform)
 This workflow is triggered when users submit rhetorical figures to the crowdsourced database. It combines core AI figure classification with external metadata validation and downstream synchronization.
@@ -212,17 +214,17 @@ The iSocrates pipeline is deployed across two distinct platform contexts with di
 
 **GoFigure (Public Crowdsourcing Platform):** The pipeline runs in the background on the public-facing GoFigure platform. When a community contributor submits a rhetorical figure instance from a book, the iSocrates AI Assistant automatically analyzes the submission, assigns per-figure confidence scores via DistilBERT + LLM, validates the cited source against the Google Books API, and presents an Approve/Reject recommendation to moderator approval.
 
-![iSocrates Admin Chat Interface — showing the conversational bot analyzing 'She does, doesn't she?' and identifying EROTEMA and SIBILANCE in real-time.](isocrates.png)
+![iSocrates Admin Chat Interface — showing the conversational bot analyzing 'She does, doesn't she?' and identifying EROTEMA and SIBILANCE in real-time.](pictures/isocrates.png)
 
 *Figure 3: The iSocrates Admin Interface. The conversational bot is shown identifying rhetorical figures in real-time within an interactive chat interface, explaining its reasoning to the user.*
 
-![GoFigure Moderation Panel — showing the iSocrates AI Assistant analyzing Epiphora and Ploke instances with 85% confidence scores and source validation.](gofigureanalysis.png)
+![GoFigure Moderation Panel — showing the iSocrates AI Assistant analyzing Epiphora and Ploke instances with 85% confidence scores and source validation.](pictures/gofigureanalysis.png)
 
 *Figure 4: The GoFigure Moderation Panel. The iSocrates AI Assistant is shown analyzing a submitted instance, displaying per-figure confidence scores (85.0%) for Epiphora and Ploke, and providing a source validation verdict. The panel displays the user's submitted annotations that are currently pending moderator approval.*
 
 > **Video Demonstrations:** Live recordings of both platforms in action are available:  
-> - [iSocrates Bot Demo](isocrates.mov) — Conversational rhetorical analysis and HITL feedback submission.  
-> - [GoFigure Verification Demo](gofigure.mov) — End-to-end crowdsourcing, AI analysis, source validation, and moderation workflow.
+> - [iSocrates Bot Demo](pictures/isocrates.mov) — Conversational rhetorical analysis and HITL feedback submission.  
+> - [GoFigure Verification Demo](pictures/gofigure.mov) — End-to-end crowdsourcing, AI analysis, source validation, and moderation workflow.
 
 ## 7. The Future: Advanced Architectures
 While the current pipeline is stable in production, automated evaluation metrics provide us with clear structural weaknesses to tackle next:
@@ -267,5 +269,7 @@ The detection of rhetorical figures cannot be solved by simply throwing larger m
 12. Mangrulkar, S., Gugger, S., Debut, L., Belkada, Y., Paul, S., & Bossan, B. (2026). *PEFT: State-of-the-art Parameter-Efficient Fine-Tuning methods* [Computer software]. GitHub. https://github.com/huggingface/peft.
 13. Parrish, A. (2026). *pronouncingpy: A simple interface for the CMU Pronouncing Dictionary* [Computer software]. GitHub. https://github.com/aparrish/pronouncingpy
 14. Google. (2024). *Google Books APIs*. Google Developers. https://developers.google.com/books/
-15. Abdin, M., et al. (2024). Phi-3 Technical Report: A Highly Capable Language Model Locally on Your Phone. arXiv preprint arXiv:2404.14219. https://arxiv.org/abs/2404.14219
+15. Abdin, M., et al. (2024). *Phi-3 Technical Report: A Highly Capable Language Model Locally on Your Phone*. arXiv preprint arXiv:2404.14219.
 16. Paszke, A., et al. (2019). *PyTorch: An Imperative Style, High-Performance Deep Learning Library*. Advances in Neural Information Processing Systems, 32.
+17. Garcez, A. d., & Lamb, L. C. (2023). *Neurosymbolic AI: The 3rd Wave*. Artificial Intelligence Review, 56(11), 12387-12406.
+18. Marcus, G. (2020). *The Next Decade in AI: Four Steps Towards Robust Artificial Intelligence*. arXiv preprint arXiv:2002.06177.
