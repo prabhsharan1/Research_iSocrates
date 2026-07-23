@@ -402,17 +402,17 @@ The iSocrates pipeline is deployed across two distinct platform contexts with di
 
 **GoFigure (Public Crowdsourcing Platform):** The pipeline runs in the background on the public-facing GoFigure platform. When a community contributor submits a rhetorical figure instance from a book, the iSocrates AI Assistant automatically analyzes the submission, assigns per-figure confidence scores via DistilBERT + LLM, validates the cited source against the Google Books API, and presents an Approve/Reject recommendation to moderator approval.
 
-![iSocrates Admin Chat Interface — showing the conversational bot analyzing 'She does, doesn't she?' and identifying EROTEMA and SIBILANCE in real-time.](pictures/isocrates.png)
+![iSocrates Admin Chat Interface — showing the conversational bot analyzing 'She does, doesn't she?' and identifying EROTEMA and SIBILANCE in real-time.](isocrates.png)
 
 *Figure 3: The iSocrates Admin Interface. The conversational bot is shown identifying rhetorical figures in real-time within an interactive chat interface, explaining its reasoning to the user.*
 
-![GoFigure Moderation Panel — showing the iSocrates AI Assistant analyzing Epiphora and Ploke instances with 85% confidence scores and source validation.](pictures/gofigureanalysis.png)
+![GoFigure Moderation Panel — showing the iSocrates AI Assistant analyzing Epiphora and Ploke instances with 85% confidence scores and source validation.](gofigureanalysis.png)
 
 *Figure 4: The GoFigure Moderation Panel. The iSocrates AI Assistant is shown analyzing a submitted instance, displaying per-figure confidence scores (85.0%) for Epiphora and Ploke, and providing a source validation verdict. The panel displays the user's submitted annotations that are currently pending moderator approval.*
 
 > **Video Demonstrations:** Live recordings of both platforms in action are available:  
-> - [iSocrates Bot Demo](pictures/isocrates.mov) — Conversational rhetorical analysis and HITL feedback submission.  
-> - [GoFigure Verification Demo](pictures/gofigure.mov) — End-to-end crowdsourcing, AI analysis, source validation, and moderation workflow.
+> - [iSocrates Bot Demo](isocrates.mov) — Conversational rhetorical analysis and HITL feedback submission.  
+> - [GoFigure Verification Demo](gofigure.mov) — End-to-end crowdsourcing, AI analysis, source validation, and moderation workflow.
 
 ## 7. The Future: Advanced Architectures
 While the current pipeline is stable in production, automated evaluation metrics provide us with clear structural weaknesses to tackle next:
