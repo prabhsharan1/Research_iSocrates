@@ -132,7 +132,7 @@ From a rhetorical theory perspective, subword tokenizers slice words into arbitr
 *Table 2: Token classification metrics demonstrating the false accuracy paradox caused by extreme `O`-class token imbalance.*
 
 ### 2.3 DeBERTa Token Classifier & The "NaN Loss" Collapse
-We subsequently tested `microsoft/deberta-v3-small` (He et al., 2021) to leverage disentangled attention and relative position encodings. However, the combination of extreme multi-class sparsity (163 figure tags) and token-level loss gradients caused severe numerical instability, resulting in **NaN loss collapse** during epoch 3. This proved that token-level classification is unsuited for multi-class rhetorical figure extraction.
+We subsequently tested `microsoft/deberta-v3-small` (He et al., 2021) to leverage its advanced disentangled attention and relative position encodings. However, the model failed completely on multiple fronts: first, because many sentences contain multiple overlapping rhetorical figures simultaneously, token-level classifiers struggled to map multiple concurrent labels to the same text spans. Furthermore, trying to predict 163 different figure tags at the individual token level created extreme data sparsity and unstable loss gradients. This math overload caused a NaN (Not a Number) loss collapse during epoch 3, where the training values broke down entirely. This failure provided final confirmation that token-level classification is fundamentally unsuited for multi-class rhetorical figure extraction.
 
 ### 2.4 The Neuro-Symbolic Hybrid Pivot
 Guided by these failures, we decoupled candidate detection from span extraction:
