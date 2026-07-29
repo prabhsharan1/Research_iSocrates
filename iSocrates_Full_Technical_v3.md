@@ -48,6 +48,7 @@ flowchart TD
     H1{{"Fail-Soft Fallback\n(Match Succeeded?)"}}
     I1["Qwen 2.5 7B 4-bit GGUF\n(Dynamic Few-Shot RAG Prompt Verification)"]
     J1(["Verified Figure & Character Spans\n(Confidence Breakdown Card)"])
+    K1(["Rejected / Low Confidence\n(0.0% Score Card)"])
 
     A1 --> B1
     B1 -- "Match Found" --> C1
@@ -60,7 +61,8 @@ flowchart TD
     H1 -- "Yes (Score 95)" --> J1
     H1 -- "No (Fallback)" --> I1
     E1 -- "Semantic / Complex Trope" --> I1
-    I1 --> J1
+    I1 -- "Verified" --> J1
+    I1 -- "Rejected / False Positive" --> K1
 ```
 *Figure 1: The Enhanced Triple-Check Hybrid Architecture. Deterministic phonetic, repetition, and syntactic fast-paths — grounded in ontological work on figures of lexical repetition (Wang, Berry & Harris, 2021; Wang, 2025) — act as sub-millisecond logic gates (<1 ms) before falling back softly to the local 7B LLM with RAG DB prompt injections for complex semantic verification.*
 
